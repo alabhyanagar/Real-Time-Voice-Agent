@@ -63,6 +63,11 @@ class ClientMetricsEvent(EventEnvelope):
     type: Literal["client_metrics"] = "client_metrics"
     metrics: dict[str, float | int | str] = Field(default_factory=dict)
 
+class ToolConfirmationResponseEvent(EventEnvelope):
+    type: Literal["tool_confirmation_response"] = "tool_confirmation_response"
+    confirmation_id: str = Field(min_length=1)
+    approved: bool
+
 class ReadyEvent(EventEnvelope):
     type: Literal["ready"] = "ready"
     server_version: str
@@ -120,7 +125,7 @@ class TelemetryEvent(EventEnvelope):
     type: Literal["telemetry"] = "telemetry"
     measurements: dict[str, float | int] = Field(default_factory=dict)
 
-_CLIENT = (HelloEvent, AudioFormatEvent, AudioFrameMetadata, CancelEvent, FlushEvent, FlushAckEvent, ResumeEvent, PingEvent, ClientMetricsEvent)
+_CLIENT = (HelloEvent, AudioFormatEvent, AudioFrameMetadata, CancelEvent, FlushEvent, FlushAckEvent, ResumeEvent, PingEvent, ClientMetricsEvent, ToolConfirmationResponseEvent)
 _SERVER = (ReadyEvent, StateEvent, TranscriptEvent, ResponseTextDeltaEvent, AudioStartEvent, AudioEndEvent, AudioFlushEvent, ToolStatusEvent, ToolConfirmationEvent, UiCardEvent, ErrorEvent, TelemetryEvent, PongEvent)
 ClientEvent = Annotated[Union[_CLIENT], Field(discriminator="type")]
 ServerEvent = Annotated[Union[_SERVER], Field(discriminator="type")]

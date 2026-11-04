@@ -57,3 +57,4 @@ env/
 .idea/
 *.swp
 *.swo
+venv_broken_*/

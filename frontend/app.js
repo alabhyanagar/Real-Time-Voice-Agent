@@ -15,6 +15,9 @@ let isConnected = false;
 
 // Audio playback queue variables
 let sessionId = null;
+// This is only a server-issued reconnect handle. User identity is never stored
+// in or accepted from the client memory protocol.
+let reconnectSessionId = window.localStorage.getItem('voice_agent_session_id') || null;
 let turnId = crypto.randomUUID();
 let clientSequence = 0;
 let frameIndex = 0;
@@ -47,7 +50,8 @@ async function startSession() {
         // 2. Establish WebSocket connection directly targeting FastAPI backend on port 8000
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const hostname = window.location.hostname || 'localhost';
-        const wsUrl = `${wsProtocol}//${hostname}:8000/api/v1/ws/audio`;
+        const reconnectQuery = reconnectSessionId ? `?session_id=${encodeURIComponent(reconnectSessionId)}` : '';
+        const wsUrl = `${wsProtocol}//${hostname}:8000/api/v1/ws/audio${reconnectQuery}`;
 
         console.log(`Connecting to WebSocket endpoint: ${wsUrl}`);
         ws = new WebSocket(wsUrl);
@@ -158,6 +162,8 @@ function clearPlaceholder() {
 function handleServerMessage(data) {
     if (data.type === 'ready') {
         sessionId = data.session_id;
+        reconnectSessionId = data.session_id;
+        window.localStorage.setItem('voice_agent_session_id', reconnectSessionId);
         generationId = data.generation_id || null;
         negotiatedSampleRate = data.audio_format.sample_rate_hz || 16000;
         sendClientEvent('hello', { client_name: 'web', client_version: '1.0.0' });

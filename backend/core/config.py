@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     # Storage configuration. Connections are initialized in the application
     # lifespan in a later step.
     REDIS_URL: str = "redis://localhost:6379/0"
+    MEMORY_REDIS_REQUIRED: bool = False
+    MEMORY_MAX_TURNS: int = 15
+    MEMORY_MAX_TOKENS: int = 4_000
+    MEMORY_TTL_SECONDS: int = 86_400
+    MEMORY_CANCEL_TTL_SECONDS: int = 300
+    MEMORY_SUMMARY_MAX_CHARS: int = 2_000
+    MEMORY_MAX_MESSAGE_CHARS: int = 32_000
     POSTGRES_DSN: str = "postgresql+asyncpg://voice_agent:voice_agent@localhost:5432/voice_agent"
     CHROMA_PATH: str = "data/chroma"
 
@@ -86,6 +93,58 @@ class Settings(BaseSettings):
     REQUIRE_EXTERNAL_SERVICES: bool = False
     TOOL_EXECUTION_TIMEOUT_SECONDS: float = 15.0
     MAX_TOOL_CALLS_PER_TURN: int = 4
+    TOOLS_ENABLED: bool = False
+    WORKSPACE_ROOTS: List[str] = Field(default_factory=list)
+    WORKSPACE_MAX_LIST_RESULTS: int = 100
+    WORKSPACE_MAX_SEARCH_FILE_BYTES: int = 1_000_000
+    WORKSPACE_MAX_READ_BYTES: int = 256_000
+    WORKSPACE_MAX_READ_LINES: int = 300
+    WORKSPACE_MAX_WRITE_BYTES: int = 256_000
+    WORKSPACE_TRASH_DIR: str = ".voice_agent_trash"
+    WORKSPACE_GIT_TIMEOUT_SECONDS: float = 15.0
+    WORKSPACE_ALLOWED_EXTENSIONS: List[str] = Field(default_factory=list)
+    WORKSPACE_SECRET_FILE_PATTERNS: List[str] = Field(default_factory=lambda: [".env", "*.pem", "*.key", "*secret*", "*credential*", "id_rsa", "id_ed25519"])
+    WEB_SEARCH_ENDPOINT: str = ""
+    WEB_SEARCH_API_KEY: str = ""
+    WEB_ALLOWED_DOMAINS: List[str] = Field(default_factory=list)
+    WEB_MAX_RESULTS: int = 10
+    WEB_MAX_RESPONSE_BYTES: int = 1_000_000
+    WEB_FETCH_TIMEOUT_SECONDS: float = 15.0
+    WEB_USER_AGENT: str = "RealTimeVoiceAgent/1.0"
+    GOOGLE_ACCESS_TOKEN: str = ""
+    GOOGLE_API_BASE_URL: str = "https://www.googleapis.com"
+    GOOGLE_TIMEOUT_SECONDS: float = 15.0
+    GOOGLE_MAX_RESULTS: int = 20
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_OAUTH_CLIENT_SECRET: str = ""
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/oauth/google/callback"
+    GOOGLE_OAUTH_AUTHORIZE_URL: str = "https://accounts.google.com/o/oauth2/v2/auth"
+    GOOGLE_OAUTH_TOKEN_URL: str = "https://oauth2.googleapis.com/token"
+    GOOGLE_OAUTH_REVOKE_URL: str = "https://oauth2.googleapis.com/revoke"
+    GOOGLE_OAUTH_ENCRYPTION_KEY: str = ""
+    GOOGLE_TOKEN_DB_PATH: str = "data/google_tokens.sqlite3"
+    GRAPH_ACCESS_TOKEN: str = ""
+    GRAPH_API_BASE_URL: str = "https://graph.microsoft.com/v1.0"
+    GRAPH_TIMEOUT_SECONDS: float = 15.0
+    MICROSOFT_OAUTH_CLIENT_ID: str = ""
+    MICROSOFT_OAUTH_CLIENT_SECRET: str = ""
+    MICROSOFT_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/oauth/microsoft/callback"
+    MICROSOFT_OAUTH_AUTHORIZE_URL: str = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+    MICROSOFT_OAUTH_TOKEN_URL: str = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+    MICROSOFT_TOKEN_DB_PATH: str = "data/microsoft_tokens.sqlite3"
+    INTEGRATION_TIMEOUT_SECONDS: float = 15.0
+    ESP32_BASE_URL: str = ""
+    ESP32_API_KEY: str = ""
+    MERN_API_BASE_URL: str = ""
+    MERN_API_KEY: str = ""
+    TELEPHONY_TIMEOUT_SECONDS: float = 15.0
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_NUMBER: str = ""
+    TWILIO_API_BASE_URL: str = "https://api.twilio.com/2010-04-01"
+    TWILIO_VOICE_WEBHOOK_URL: str = ""
+    TWILIO_STATUS_CALLBACK_URL: str = ""
+    TWILIO_ALLOWED_DESTINATIONS: List[str] = Field(default_factory=list)
     WS_RATE_LIMIT_PER_MINUTE: int = 600
     WS_MAX_CONNECTIONS_PER_USER: int = 4
     VAD_SPEECH_ONSET_FRAMES: int = 2
@@ -125,11 +184,47 @@ class Settings(BaseSettings):
         if self.WS_MAX_MESSAGE_BYTES <= 0:
             raise ValueError("WS_MAX_MESSAGE_BYTES must be positive")
 
+        if self.MEMORY_MAX_TURNS < 1 or self.MEMORY_MAX_TOKENS < 128 or self.MEMORY_TTL_SECONDS <= 0 or self.MEMORY_CANCEL_TTL_SECONDS <= 0 or self.MEMORY_SUMMARY_MAX_CHARS < 100 or self.MEMORY_MAX_MESSAGE_CHARS < 1:
+            raise ValueError("Conversation memory limits are invalid")
+
         if self.WS_RATE_LIMIT_PER_MINUTE <= 0 or self.WS_MAX_CONNECTIONS_PER_USER <= 0:
             raise ValueError("WebSocket rate and connection limits must be positive")
 
         if self.TOOL_EXECUTION_TIMEOUT_SECONDS <= 0 or self.MAX_TOOL_CALLS_PER_TURN <= 0:
             raise ValueError("Tool execution limits must be positive")
+
+        if self.WORKSPACE_MAX_LIST_RESULTS <= 0:
+            raise ValueError("WORKSPACE_MAX_LIST_RESULTS must be positive")
+
+        if self.WORKSPACE_MAX_SEARCH_FILE_BYTES <= 0 or self.WORKSPACE_MAX_READ_BYTES <= 0 or self.WORKSPACE_MAX_READ_LINES <= 0:
+            raise ValueError("Workspace file and line limits must be positive")
+
+        if self.WORKSPACE_MAX_WRITE_BYTES <= 0:
+            raise ValueError("WORKSPACE_MAX_WRITE_BYTES must be positive")
+        trash_path = Path(self.WORKSPACE_TRASH_DIR)
+        if trash_path.is_absolute() or ".." in trash_path.parts or not self.WORKSPACE_TRASH_DIR.strip():
+            raise ValueError("WORKSPACE_TRASH_DIR must be a relative path inside each workspace root")
+        if self.WORKSPACE_GIT_TIMEOUT_SECONDS <= 0:
+            raise ValueError("WORKSPACE_GIT_TIMEOUT_SECONDS must be positive")
+
+        if self.WEB_MAX_RESULTS <= 0 or self.WEB_MAX_RESPONSE_BYTES <= 0 or self.WEB_FETCH_TIMEOUT_SECONDS <= 0:
+            raise ValueError("Web search and fetch limits must be positive")
+        if not self.WEB_USER_AGENT.strip():
+            raise ValueError("WEB_USER_AGENT cannot be empty")
+        if self.GOOGLE_TIMEOUT_SECONDS <= 0 or self.GOOGLE_MAX_RESULTS <= 0:
+            raise ValueError("Google Workspace limits must be positive")
+        if self.GRAPH_TIMEOUT_SECONDS <= 0 or not self.GRAPH_API_BASE_URL.startswith("https://"):
+            raise ValueError("Microsoft Graph configuration is invalid")
+        if not self.MICROSOFT_OAUTH_AUTHORIZE_URL.startswith("https://") or not self.MICROSOFT_OAUTH_TOKEN_URL.startswith("https://"):
+            raise ValueError("Microsoft OAuth endpoints must use HTTPS")
+        if self.INTEGRATION_TIMEOUT_SECONDS <= 0:
+            raise ValueError("INTEGRATION_TIMEOUT_SECONDS must be positive")
+        if self.TELEPHONY_TIMEOUT_SECONDS <= 0 or not self.TWILIO_API_BASE_URL.startswith("https://"):
+            raise ValueError("Telephony configuration is invalid")
+        if not self.GOOGLE_API_BASE_URL.startswith("https://"):
+            raise ValueError("GOOGLE_API_BASE_URL must use HTTPS")
+        if not self.GOOGLE_OAUTH_AUTHORIZE_URL.startswith("https://") or not self.GOOGLE_OAUTH_TOKEN_URL.startswith("https://") or not self.GOOGLE_OAUTH_REVOKE_URL.startswith("https://"):
+            raise ValueError("Google OAuth endpoints must use HTTPS")
 
         if self.JWT_EXPIRE_SECONDS <= 0:
             raise ValueError("JWT_EXPIRE_SECONDS must be positive")
@@ -137,6 +232,10 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT == "production":
             if not self.JWT_SECRET:
                 raise ValueError("JWT_SECRET is required in production")
+            if not self.GOOGLE_OAUTH_ENCRYPTION_KEY:
+                raise ValueError("GOOGLE_OAUTH_ENCRYPTION_KEY is required in production")
+            if not self.MEMORY_REDIS_REQUIRED:
+                raise ValueError("MEMORY_REDIS_REQUIRED must be true in production")
             selected_key = {
                 "groq": self.GROQ_API_KEY,
                 "gemini": self.GEMINI_API_KEY,

@@ -4,9 +4,10 @@ from .cancellation import GenerationController
 from .session_state import ALLOWED_TRANSITIONS, SessionState
 
 class SessionController:
-    def __init__(self, session_id: str, user_id: str):
+    def __init__(self, session_id: str, user_id: str, granted_scopes: frozenset[str] = frozenset()):
         self.session_id = session_id
         self.user_id = user_id
+        self.granted_scopes = frozenset(granted_scopes)
         self.state = SessionState.IDLE
         self.turn_id = str(uuid4())
         self.response_id: str | None = None

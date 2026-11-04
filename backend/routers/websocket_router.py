@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import json
+import re
 from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
@@ -10,7 +11,7 @@ from backend.core.rate_limit import ConnectionRateLimiter
 from backend.core.security import authenticate_websocket
 from backend.protocol.audio_frames import validate_audio_frame
 from backend.protocol import parse_event
-from backend.protocol.messages import AudioFormat, AudioFormatEvent, AudioFrameMetadata, CancelEvent, FlushEvent, HelloEvent, PingEvent
+from backend.protocol.messages import AudioFormat, AudioFormatEvent, AudioFrameMetadata, CancelEvent, FlushEvent, HelloEvent, PingEvent, ToolConfirmationResponseEvent
 from backend.services.pipeline_orchestrator import PipelineOrchestrator
 from backend.sessions.session_manager import session_manager
 
@@ -29,6 +30,25 @@ def _next_sequence(websocket: WebSocket) -> int:
     sequence = int(websocket.scope.get("voice_sequence", 0))
     websocket.scope["voice_sequence"] = sequence + 1
     return sequence
+
+
+def _claim_scopes(claims: dict) -> frozenset[str]:
+    """Normalize common JWT scope claim shapes without trusting client frames."""
+    raw = claims.get("scopes", claims.get("scope", []))
+    if isinstance(raw, str):
+        return frozenset(scope for scope in raw.split() if scope)
+    if isinstance(raw, (list, tuple, set)):
+        return frozenset(str(scope) for scope in raw if str(scope))
+    return frozenset()
+
+
+def _requested_session_id(websocket: WebSocket) -> str:
+    """Accept only a reconnect handle; identity still comes from authenticated JWT."""
+    params = getattr(websocket, "query_params", {}) or {}
+    requested = params.get("session_id") if hasattr(params, "get") else None
+    if requested and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(requested)):
+        return str(requested)
+    return str(uuid4())
 
 
 def _event_metadata(session_id: str, *, sequence: int = 0, generation_id: str | None = None) -> dict:
@@ -54,7 +74,7 @@ async def _send_error(websocket: WebSocket, session_id: str, code: str, message:
 
 @router.websocket("/ws/audio")
 async def audio_websocket_endpoint(websocket: WebSocket):
-    session_id = str(uuid4())
+    session_id = _requested_session_id(websocket)
     expected_audio_bytes = None
     claims = authenticate_websocket(websocket)
     if claims is None:
@@ -93,7 +113,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
 
     # Safely initialize the pipeline orchestrator
     try:
-        session = session_manager.create(session_id, user_id)
+        session = session_manager.create(session_id, user_id, _claim_scopes(claims))
         try:
             orchestrator = PipelineOrchestrator(websocket, session=session)
         except TypeError as exc:
@@ -211,6 +231,8 @@ async def audio_websocket_endpoint(websocket: WebSocket):
                             **_event_metadata(session_id, sequence=_next_sequence(websocket), generation_id=websocket.scope["voice_generation_id"]),
                             "reason": event.reason,
                         })
+                    elif isinstance(event, ToolConfirmationResponseEvent):
+                        await orchestrator.handle_tool_confirmation(event.confirmation_id, event.approved)
                 except (ValueError, json.JSONDecodeError) as protocol_error:
                     await _send_error(websocket, session_id, "INVALID_PROTOCOL_MESSAGE", str(protocol_error))
                     await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

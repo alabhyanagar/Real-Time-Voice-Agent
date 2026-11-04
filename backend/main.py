@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from backend.routers import websocket_router
+from backend.routers import websocket_router, google_oauth_router, microsoft_oauth_router, memory_router
 from backend.core.config import settings
 from backend.core.lifecycle import runtime_resources
 from fastapi.responses import JSONResponse
@@ -36,6 +36,9 @@ app.add_middleware(
 
 # Register routers
 app.include_router(websocket_router.router, prefix="/api/v1")
+app.include_router(google_oauth_router.router, prefix="/api/v1")
+app.include_router(microsoft_oauth_router.router, prefix="/api/v1")
+app.include_router(memory_router.router, prefix="/api/v1")
 
 # Mount frontend files
 frontend_dir = Path(__file__).resolve().parent.parent / "frontend"

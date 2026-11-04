@@ -15,12 +15,16 @@ class RuntimeResources:
 
     async def startup(self) -> None:
         self.dependencies = {"configuration": "ready", "telemetry": "configured"}
-        if settings.REQUIRE_EXTERNAL_SERVICES:
+        if settings.MEMORY_REDIS_REQUIRED or settings.REQUIRE_EXTERNAL_SERVICES:
             try:
                 import redis.asyncio as redis
                 self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
                 await self.redis.ping()
                 self.dependencies["redis"] = "ready"
+
+                if not settings.REQUIRE_EXTERNAL_SERVICES:
+                    self.ready = True
+                    return
 
                 from sqlalchemy.ext.asyncio import create_async_engine
                 self.postgres = create_async_engine(settings.POSTGRES_DSN, pool_pre_ping=True)

@@ -17,6 +17,9 @@ class FakeOrchestrator:
     async def handle_audio_chunk(self, audio_chunk: bytes):
         self.received_audio = audio_chunk
 
+    async def handle_tool_confirmation(self, confirmation_id: str, approved: bool):
+        self.confirmation = (confirmation_id, approved)
+
     async def close(self):
         return None
 
@@ -61,6 +64,30 @@ class WebSocketContractTests(unittest.TestCase):
         self.assertEqual(socket.sent_json[0]["type"], "ready")
         self.assertEqual(socket.sent_json[1], {"type": "state", "state": "LISTENING"})
         self.assertEqual(socket.sent_json[2]["type"], "pong")
+
+    def test_audio_endpoint_routes_client_confirmation_response(self):
+        class ConfirmationSocket(FakeWebSocket):
+            def __init__(self):
+                super().__init__()
+                self.messages = [
+                    {"text": '{"type":"tool_confirmation_response","protocol_version":"1.0","session_id":"s-1","turn_id":"t-1","confirmation_id":"c-1","approved":true}'},
+                    {"type": "websocket.disconnect"},
+                ]
+
+        instances = []
+
+        class RecordingOrchestrator(FakeOrchestrator):
+            def __init__(self, websocket):
+                super().__init__(websocket)
+                instances.append(self)
+
+        original_orchestrator = websocket_router.PipelineOrchestrator
+        websocket_router.PipelineOrchestrator = RecordingOrchestrator
+        try:
+            asyncio.run(websocket_router.audio_websocket_endpoint(ConfirmationSocket()))
+        finally:
+            websocket_router.PipelineOrchestrator = original_orchestrator
+        self.assertEqual(instances[0].confirmation, ("c-1", True))
 
 
 if __name__ == "__main__":

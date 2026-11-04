@@ -56,4 +56,4 @@ The WebSocket test uses a fake orchestrator. It verifies transport behavior with
 
 Steps 0–7 of the implementation plan are complete: validated configuration, authenticated/versioned WebSockets, session cancellation, AudioWorklet capture, debounced VAD, bounded playback, LangChain provider abstraction, streaming STT/TTS, and policy-aware tool plumbing. See [`docs/steps_0_7_completion_audit.md`](docs/steps_0_7_completion_audit.md) for the cross-validation.
 
-The next plan boundary is durable conversation memory (Step 8), followed by the expanded tool workshop, Redis short-term memory, Chroma RAG, and production deployment phases.
+Step 8 is implemented as the tool-free LangGraph conversational boundary. The next plan boundary is the Step 9 tool architecture workshop, followed by Redis short-term memory, Chroma RAG, and production deployment phases.

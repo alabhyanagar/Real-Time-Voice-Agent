@@ -24,6 +24,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertGreater(defaults.WS_MAX_MESSAGE_BYTES, 0)
         self.assertEqual(defaults.AUDIO_SAMPLE_RATE, 16_000)
         self.assertFalse(defaults.DEBUG)
+        self.assertTrue(defaults.MICROSOFT_OAUTH_AUTHORIZE_URL.startswith("https://"))
 
     def test_production_debug_mode_is_rejected(self):
         from backend.core.config import Settings

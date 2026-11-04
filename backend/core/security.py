@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import WebSocket
+from fastapi import Request, WebSocket
 
 from backend.core.config import settings
 
@@ -36,5 +36,29 @@ def authenticate_websocket(websocket: WebSocket) -> dict[str, Any] | None:
         if not claims.get("sub"):
             return None
         return claims
+    except Exception:
+        return None
+
+
+def authenticate_http(request: Request) -> dict[str, Any] | None:
+    """Authenticate an HTTP request using the same JWT policy as WebSockets."""
+    authorization = request.headers.get("authorization", "")
+    token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else None
+    if not token:
+        if settings.ENVIRONMENT == "production":
+            return None
+        return {"sub": "anonymous:http"}
+    if not settings.JWT_SECRET:
+        return None
+    try:
+        import jwt
+
+        options: dict[str, Any] = {"algorithms": [settings.JWT_ALGORITHM]}
+        if settings.JWT_ISSUER:
+            options["issuer"] = settings.JWT_ISSUER
+        if settings.JWT_AUDIENCE:
+            options["audience"] = settings.JWT_AUDIENCE
+        claims = jwt.decode(token, settings.JWT_SECRET, **options)
+        return claims if claims.get("sub") else None
     except Exception:
         return None
