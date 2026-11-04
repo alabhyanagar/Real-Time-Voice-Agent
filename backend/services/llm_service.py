@@ -44,6 +44,7 @@ class LLMService:
         turn_id: str = "local-turn",
         generation_id: str = "local-generation",
         granted_scopes: frozenset[str] | None = None,
+        retrieved_context: list[dict] | None = None,
     ) -> AsyncGenerator[str, None]:
         """Yield text chunks from the configured LangChain chat model."""
         try:
@@ -54,6 +55,7 @@ class LLMService:
                     user_id=user_id,
                     turn_id=turn_id,
                     generation_id=generation_id,
+                    retrieved_context=retrieved_context,
                 )
                 async for chunk in self.graph.astream(
                     to_langchain_messages(state),
@@ -77,6 +79,7 @@ class LLMService:
                     user_id=user_id,
                     turn_id=turn_id,
                     generation_id=generation_id,
+                    retrieved_context=retrieved_context,
                 ):
                     yield text
         except Exception as exc:

@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     MEMORY_MAX_MESSAGE_CHARS: int = 32_000
     POSTGRES_DSN: str = "postgresql+asyncpg://voice_agent:voice_agent@localhost:5432/voice_agent"
     CHROMA_PATH: str = "data/chroma"
+    RAG_MAX_DOCUMENT_BYTES: int = 10_000_000
+    RAG_CHUNK_SIZE: int = 900
+    RAG_CHUNK_OVERLAP: int = 120
+    RAG_TOP_K: int = 5
 
     # Authentication and policy configuration. Enforcement is intentionally
     # deferred to the gateway-hardening step.
@@ -186,6 +190,8 @@ class Settings(BaseSettings):
 
         if self.MEMORY_MAX_TURNS < 1 or self.MEMORY_MAX_TOKENS < 128 or self.MEMORY_TTL_SECONDS <= 0 or self.MEMORY_CANCEL_TTL_SECONDS <= 0 or self.MEMORY_SUMMARY_MAX_CHARS < 100 or self.MEMORY_MAX_MESSAGE_CHARS < 1:
             raise ValueError("Conversation memory limits are invalid")
+        if self.RAG_MAX_DOCUMENT_BYTES <= 0 or self.RAG_CHUNK_SIZE <= 0 or self.RAG_CHUNK_OVERLAP < 0 or self.RAG_CHUNK_OVERLAP >= self.RAG_CHUNK_SIZE or self.RAG_TOP_K <= 0:
+            raise ValueError("RAG limits are invalid")
 
         if self.WS_RATE_LIMIT_PER_MINUTE <= 0 or self.WS_MAX_CONNECTIONS_PER_USER <= 0:
             raise ValueError("WebSocket rate and connection limits must be positive")

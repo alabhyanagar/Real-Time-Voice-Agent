@@ -42,6 +42,11 @@ def _claim_scopes(claims: dict) -> frozenset[str]:
     return frozenset()
 
 
+def _claim_tenant(claims: dict, user_id: str) -> str:
+    tenant = claims.get("tenant_id", claims.get("tid", user_id))
+    return str(tenant) if tenant else user_id
+
+
 def _requested_session_id(websocket: WebSocket) -> str:
     """Accept only a reconnect handle; identity still comes from authenticated JWT."""
     params = getattr(websocket, "query_params", {}) or {}
@@ -113,7 +118,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
 
     # Safely initialize the pipeline orchestrator
     try:
-        session = session_manager.create(session_id, user_id, _claim_scopes(claims))
+        session = session_manager.create(session_id, user_id, _claim_scopes(claims), _claim_tenant(claims, user_id))
         try:
             orchestrator = PipelineOrchestrator(websocket, session=session)
         except TypeError as exc:

@@ -291,3 +291,16 @@ work belongs to Step 9 after this checkpoint.
   passing tests, `pip check` is clean, and backend AST parsing passes.
 - Step 11 is now the next starting point: ChromaDB RAG ingestion, retrieval,
   query rewriting, and citations.
+- Implemented Step 11 in `backend/memory/rag/`: safe text/HTML/JSON/Markdown
+  ingestion, optional PDF extraction, normalization, overlapping chunks,
+  ChromaDB persistence with a Python 3.15-compatible JSON fallback, metadata,
+  user/tenant ACL filtering, private versus tenant access policies, bounded
+  reranked retrieval, reference-aware query rewriting, citations, and
+  untrusted-context prompt boundaries.
+- Added authenticated `/api/v1/rag/documents` upload/delete and `/api/v1/rag/query`
+  routes. Integrated retrieval into the voice pipeline with citations UI cards,
+  `rag_retrieval_ms` telemetry, and LangGraph context injection. Added RAG
+  settings to `config.py` and `.env.example`, plus `docs/step11_rag.md`.
+- Added `tests/test_rag.py`. Full Step 11 verification: `pytest` reports 59
+  passing tests, `pip check` is clean, backend AST parsing and frontend syntax
+  checks pass. The next starting point is Step 12, frontend product experience.

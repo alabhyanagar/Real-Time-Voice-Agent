@@ -6,8 +6,8 @@ class SessionManager:
     def __init__(self):
         self._sessions: dict[str, SessionController] = {}
 
-    def create(self, session_id: str, user_id: str, granted_scopes: frozenset[str] = frozenset()) -> SessionController:
-        session = SessionController(session_id, user_id, granted_scopes)
+    def create(self, session_id: str, user_id: str, granted_scopes: frozenset[str] = frozenset(), tenant_id: str | None = None) -> SessionController:
+        session = SessionController(session_id, user_id, granted_scopes, tenant_id)
         self._sessions[session_id] = session
         return session
 

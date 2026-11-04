@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+import time
 from typing import Dict, List, Optional
 from uuid import uuid4
 
@@ -17,6 +18,8 @@ from backend.protocol.messages import (
     ToolStatusEvent,
     ToolConfirmationResponseEvent,
     TranscriptEvent,
+    TelemetryEvent,
+    UiCardEvent,
 )
 from backend.services.llm_service import LLMService
 from backend.integrations.google_oauth import get_default_google_oauth_service
@@ -25,6 +28,7 @@ from backend.services.stt_service import STTService
 from backend.services.tts_service import TTSService
 from backend.services.vad_service import VADService
 from backend.memory import get_default_memory
+from backend.memory.rag import get_default_retriever
 from backend.sessions.session_controller import SessionController
 from backend.sessions.session_state import SessionState
 from backend.sessions.outbound_queue import OutboundQueue
@@ -50,6 +54,7 @@ class PipelineOrchestrator:
             scope["voice_generation_id"] = self.session.generation_id
         self.outbound = OutboundQueue(websocket)
         self.memory = get_default_memory()
+        self.rag = get_default_retriever()
         self.conversation_history: List[Dict[str, str]] = []
         self.current_task: Optional[asyncio.Task] = None
         self.stt = STTService(on_transcript_callback=self.handle_transcript)
@@ -270,6 +275,38 @@ class PipelineOrchestrator:
                 response_id=self.response_id,
             ))
 
+            retrieved_context = []
+            try:
+                retrieval_started = time.perf_counter()
+                query = self.accumulated_transcript or self.conversation_history[-1].get("content", "")
+                rag_result = await self.rag.retrieve(
+                    query,
+                    user_id=self.session.user_id,
+                    tenant_id=self.session.tenant_id,
+                    conversation=self.conversation_history,
+                )
+                retrieved_context = list(rag_result.get("context", []))
+                await self._send_event(TelemetryEvent(
+                    session_id=self._session_id(),
+                    turn_id=self.turn_id,
+                    measurements={
+                        "rag_retrieval_ms": round((time.perf_counter() - retrieval_started) * 1000, 2),
+                        "rag_result_count": len(rag_result.get("results", [])),
+                    },
+                ))
+                if rag_result.get("citations"):
+                    await self._send_event(UiCardEvent(
+                        session_id=self._session_id(),
+                        turn_id=self.turn_id,
+                        card_type="citations",
+                        payload={
+                            "citations": rag_result["citations"],
+                            "rewritten_query": rag_result.get("rewritten_query", query),
+                        },
+                    ))
+            except Exception as exc:
+                logger.warning("RAG retrieval failed; continuing without documents: %s", exc)
+
             llm_stream = self.llm.stream_response(
                 self.conversation_history,
                 session_id=self._session_id(),
@@ -281,6 +318,7 @@ class PipelineOrchestrator:
                     | get_default_google_oauth_service().scopes_for_user(self.session.user_id)
                     | get_default_microsoft_oauth_service().scopes_for_user(self.session.user_id)
                 ),
+                retrieved_context=retrieved_context,
             )
             full_assistant_response = ""
 

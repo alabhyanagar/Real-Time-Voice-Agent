@@ -9,7 +9,7 @@ from .state import AgentState
 
 
 def load_context(state: AgentState) -> dict[str, Any]:
-    """Normalize context now; durable memory retrieval is added in Step 10."""
+    """Normalize conversation and retrieved document context for the graph."""
     return {
         "messages": validate_state_messages(state.get("messages", [])),
         "retrieved_context": list(state.get("retrieved_context", [])),
