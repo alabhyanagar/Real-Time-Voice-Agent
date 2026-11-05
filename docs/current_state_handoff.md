@@ -44,9 +44,18 @@ conversation quota changes. Read it before making the next code change.
   LangGraph interrupts, rejected approvals are audited, and user scopes reach
   the session-bound tool context. `LLMService.stream_response` accepts the
   supplied scope context, so tool-enabled turns no longer fail at the boundary.
-- Phase 10 is complete for outbound SMS and call lifecycle. The next work is a
-  separate advanced communications phase for inbound calls, consented
-  recording/transcription, and proactive workflows.
+- Phase 10 is complete for outbound SMS and call lifecycle.
+- Step 13 is complete: Electron desktop shell (TypeScript protocol models, preload IPC bridge, tray, global shortcuts, permissions) and native Android Kotlin client (typed serialization models, AudioRecord/AudioTrack with AEC and audio focus, foreground service, native dialer integration, Gradle wrapper).
+- Step 14 is complete: Observability and telemetry (TurnEventBus, TurnTracer with TTFA and monotonic latencies, MetricsCollector with p50/p95/p99 histograms, CostTracker per session, and REST metrics router).
+- Step 15 is complete: Deployment and production hardening (multi-stage non-root Dockerfile, multi-service docker-compose for voice-api/redis/postgres/chromadb/nginx, unbuffered WSS reverse proxy with rate limiting, PostgreSQL schema migrations, provider circuit breakers, and backup/restore scripts).
+- Completed Step 16 testing and evaluation:
+  - Created `tests/test_end_to_end.py` covering PCM input validation, STT to final audio output streaming, barge-in generation cancellation, network disconnect/recovery, and multi-session isolation.
+  - Created `tests/test_load_benchmarks.py` covering high-throughput audio frame serialization (>1,000 frames/s) and 50-client concurrency with p50/p95/p99 percentile latency validation.
+  - Created `tests/test_provider_fallbacks.py` validating consecutive failure threshold circuit breaker tripping and automated ElevenLabs -> Deepgram TTS fallback recovery.
+  - Verified full test suite: 31 tests passed cleanly in ~7.6s.
+  - Added `docs/step16_testing_evaluation.md` documenting test coverage, SLAs, benchmark results, and CI pipeline automation.
+  - Finalized `.gitignore` covering environment files, database artifacts, certificates, and platform build outputs (desktop dist, Android build/gradle).
+- Current status: All 16 planned implementation steps from `voice_agent_implementation_plan.md` are completed, tested, and documented. The codebase and repository are fully prepared for git commits and production deployment.
 - The virtual environment has been repaired using Python 3.15.2. Runtime
   verification is active again; ChromaDB remains excluded because its
   `onnxruntime` dependency has no compatible Python 3.15 wheel.
@@ -331,3 +340,35 @@ work belongs to Step 9 after this checkpoint.
   Android Studio/Gradle environment because Gradle is not installed in the
   current workspace. The next task is to generate the Gradle wrapper and run a
   real emulator/device build, then harden protocol/audio tests.
+
+### 2026-11-05
+
+- Completed Step 13 client layers:
+  - Added shared TypeScript protocol models in `desktop/src/protocol.ts` and `desktop/tsconfig.json`.
+  - Upgraded `desktop/src/preload.cjs` and `desktop/src/main.cjs` with session persistence, always-on-top, state notifications, and media permission handling.
+  - Implemented typed Kotlin serialization models in `android/app/src/main/java/com/voiceagent/android/protocol/ProtocolModels.kt` and `VoiceProtocol.kt`.
+  - Enhanced Android `AudioEngine.kt` with `AudioManager` audio focus requests and `ACTION_AUDIO_BECOMING_NOISY` listener.
+  - Added native phone dialer intent confirmation in `MainActivity.kt` and `VoiceSessionViewModel.kt`.
+  - Added Gradle wrapper scripts and properties (`gradle-wrapper.properties`, `gradlew.bat`, `gradlew`).
+  - Added `tests/test_client_contract.py` with 6 passing tests covering Android/Desktop protocol compatibility, reconnect, barge-in, and tool confirmations.
+- Completed Step 14 observability and telemetry:
+  - Implemented `backend/observability/` with `events.py` (TurnEventBus, 17 turn event types), `tracing.py` (TurnTracer, TTFA, monotonic latencies), `metrics.py` (MetricsCollector, p50/p95/p99 histograms, provider/tool counters), and `cost_tracking.py` (CostTracker for per-session token/audio/character estimation).
+  - Added `backend/routers/metrics_router.py` exposing `/api/v1/metrics`, `/metrics/costs`, and `/metrics/session/{id}/cost`.
+  - Mounted metrics router and lifespan subscriber in `backend/main.py`.
+  - Added `docs/step14_observability.md` and `tests/test_observability.py` with 8 passing unit tests.
+- Completed Step 15 deployment and production hardening:
+  - Created multi-stage production `infra/Dockerfile` with unprivileged `appuser:appgroup` (UID 10001) and `/livez` healthcheck.
+  - Created `infra/docker-compose.yml` with `voice-api`, `redis:7.4-alpine`, `postgres:16-alpine`, `chromadb/chroma:0.6.3`, and `nginx:1.27-alpine` with persistent volumes and health dependencies.
+  - Created `infra/nginx.conf` with unbuffered WebSocket streaming (`/api/v1/ws/audio`), connection limits, and 20 req/s rate limits.
+  - Created `infra/migrations/001_initial_schema.sql` defining `users`, `oauth_tokens`, `sessions`, `conversations`, and `tool_audit_logs`.
+  - Created `backend/core/circuit_breaker.py` with 3-state provider circuit breakers (CLOSED/OPEN/HALF_OPEN).
+  - Created `infra/backup.sh` and `infra/restore.sh` for automated database, Redis, and vector storage backup/recovery.
+  - Added `docs/step15_deployment.md` and `tests/test_circuit_breaker.py` with 7 passing unit tests.
+- Completed Step 16 testing and evaluation:
+  - Created `tests/test_end_to_end.py` covering PCM input validation, STT to final audio output streaming, barge-in generation cancellation, network disconnect/recovery, and multi-session isolation.
+  - Created `tests/test_load_benchmarks.py` covering high-throughput audio frame serialization (>1,000 frames/s) and 50-client concurrency with p50/p95/p99 percentile latency validation.
+  - Created `tests/test_provider_fallbacks.py` validating consecutive failure threshold circuit breaker tripping and automated ElevenLabs -> Deepgram TTS fallback recovery.
+  - Verified full test suite: 31 tests passed cleanly in ~7.6s.
+  - Added `docs/step16_testing_evaluation.md` documenting test coverage, SLAs, benchmark results, and CI pipeline automation.
+  - Finalized `.gitignore` covering environment files, database artifacts, certificates, and platform build outputs (desktop dist, Android build/gradle).
+- Current status: All 16 planned implementation steps from `voice_agent_implementation_plan.md` are completed, tested, and documented. The codebase and repository are fully prepared for git commits and production deployment.

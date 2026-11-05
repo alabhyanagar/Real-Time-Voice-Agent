@@ -45,24 +45,50 @@ coverage.xml
 .pytest_cache/
 cover/
 
-# Environments
+# Environments & Local Secrets
 .env
+.env.*
+!.env.example
 venv/
 ENV/
 env/
 .venv/
+venv_broken_*/
 
 # IDEs and Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-venv_broken_*/
 
-# Electron and Android build outputs
+# Local runtime data, sqlite databases, and trash
+data/
+*.sqlite3
+*.db
+.voice_agent_trash/
+backups/
+*.tar.gz
+
+# Certificates and keys
+cert_data/
+*.pem
+*.key
+*.crt
+
+# Node and Desktop build outputs
+node_modules/
 desktop/node_modules/
 desktop/dist/
+
+# Android build outputs & local secrets
 android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+*.keystore
+*.jks
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

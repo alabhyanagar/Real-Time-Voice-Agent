@@ -1,0 +1,162 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Voice Agent FastAPI Backend (Async WebSocket Gateway + LangGraph Pipeline)
+  # ---------------------------------------------------------------------------
+  voice-api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: voice-agent-backend:latest
+    container_name: voice-api
+    restart: unless-stopped
+    user: "10001:10001"
+    environment:
+      - PORT=8000
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_DSN=postgresql+asyncpg://${POSTGRES_USER:-voiceuser}:${POSTGRES_PASSWORD:-voicepassword}@postgres:5432/${POSTGRES_DB:-voiceagent}
+      - CHROMA_PATH=/data/chroma
+      - REQUIRE_EXTERNAL_SERVICES=true
+      - MEMORY_REDIS_REQUIRED=true
+      - JWT_SECRET=${JWT_SECRET}
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+    volumes:
+      - chroma_data:/data/chroma
+      - app_trash:/app/.voice_agent_trash
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/livez"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ---------------------------------------------------------------------------
+  # Redis: Short-term Session Memory, Cancellation Signals & Reconnect Handles
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7.4-alpine
+    container_name: voice-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "volatile-lru"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL: Durable Persistence, Tokens, Checkpoints & Audit Logs
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: voice-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-voiceagent}
+      POSTGRES_USER: ${POSTGRES_USER:-voiceuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voicepassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voiceuser} -d ${POSTGRES_DB:-voiceagent}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+
+  # ---------------------------------------------------------------------------
+  # ChromaDB: Local Vector Database for Document RAG & Citations
+  # ---------------------------------------------------------------------------
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    container_name: voice-chromadb
+    restart: unless-stopped
+    volumes:
+      - chroma_data:/chroma/chroma
+    ports:
+      - "8001:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+
+  # ---------------------------------------------------------------------------
+  # Nginx: TLS Termination, WebSocket Reverse Proxy, Rate Limiting & Security
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: voice-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - cert_data:/etc/nginx/certs:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      voice-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  redis_data:
+    name: voice_redis_data
+  postgres_data:
+    name: voice_postgres_data
+  chroma_data:
+    name: voice_chroma_data
+  app_trash:
+    name: voice_app_trash
+  cert_data:
+    name: voice_cert_data
+

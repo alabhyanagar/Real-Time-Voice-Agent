@@ -8,15 +8,14 @@ that record exactly when each stage begins and completes.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum, unique
-from typing import Any, Callable, Coroutine
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
-
-_MAX_QUEUE = 512  # max buffered events per subscriber before oldest is dropped
 
 
 @unique
@@ -63,17 +62,13 @@ class TurnEvent:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-AsyncSubscriber = Callable[[TurnEvent], Coroutine[Any, Any, None]]
-
-
 class TurnEventBus:
     """Singleton async event bus for the voice pipeline."""
 
     _singleton: TurnEventBus | None = None
 
     def __init__(self) -> None:
-        self._subscribers: list[asyncio.Queue[TurnEvent]] = []
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._subscribers: list[Callable[[TurnEvent], Any]] = []
 
     @classmethod
     def instance(cls) -> "TurnEventBus":
@@ -83,70 +78,44 @@ class TurnEventBus:
 
     @classmethod
     def reset(cls) -> None:
-        """Reset singleton – cancels background consumer tasks."""
+        """Reset singleton – for testing only."""
         if cls._singleton is not None:
-            for task in list(cls._singleton._tasks):
-                task.cancel()
-            cls._singleton._tasks.clear()
             cls._singleton._subscribers.clear()
             cls._singleton = None
 
-    def _get_loop(self) -> asyncio.AbstractEventLoop | None:
-        try:
-            return asyncio.get_running_loop()
-        except RuntimeError:
-            return None
-
-    def subscribe(self, handler: AsyncSubscriber) -> Callable[[], None]:
-        """Register an async handler coroutine. Returns an unsubscribe callable."""
-        loop = self._get_loop()
-        if loop is None:
-            logger.warning("TurnEventBus.subscribe called outside of running event loop; subscriber ignored.")
-            return lambda: None
-
-        q: asyncio.Queue[TurnEvent] = asyncio.Queue(maxsize=_MAX_QUEUE)
-        self._subscribers.append(q)
-
-        async def _consumer() -> None:
-            try:
-                while True:
-                    try:
-                        event = await q.get()
-                    except asyncio.CancelledError:
-                        break
-                    try:
-                        await handler(event)
-                    except Exception as exc:  # noqa: BLE001
-                        logger.exception("TurnEventBus subscriber raised: %s", exc)
-                    finally:
-                        q.task_done()
-            except asyncio.CancelledError:
-                pass
-
-        task = loop.create_task(_consumer())
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+    def subscribe(self, handler: Callable[[TurnEvent], Any]) -> Callable[[], None]:
+        """Register a handler (sync function or async coroutine function)."""
+        if handler not in self._subscribers:
+            self._subscribers.append(handler)
 
         def _unsubscribe() -> None:
-            if q in self._subscribers:
-                self._subscribers.remove(q)
-            task.cancel()
+            if handler in self._subscribers:
+                self._subscribers.remove(handler)
 
         return _unsubscribe
 
     def publish(self, event: TurnEvent) -> None:
-        """Publish an event to all subscribers."""
-        for q in list(self._subscribers):
-            if q.full():
-                try:
-                    q.get_nowait()
-                    q.task_done()
-                except (asyncio.QueueEmpty, ValueError):
-                    pass
+        """Publish an event to all subscribers immediately and safely."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        for handler in list(self._subscribers):
             try:
-                q.put_nowait(event)
-            except asyncio.QueueFull:
-                pass
+                if inspect.iscoroutinefunction(handler):
+                    if loop and loop.is_running():
+                        loop.create_task(self._invoke_async(handler, event))
+                else:
+                    handler(event)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("TurnEventBus subscriber failed: %s", exc)
+
+    async def _invoke_async(self, handler: Callable[[TurnEvent], Any], event: TurnEvent) -> None:
+        try:
+            await handler(event)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("TurnEventBus async subscriber failed: %s", exc)
 
     def publish_nowait(self, event: TurnEvent) -> None:
         self.publish(event)
