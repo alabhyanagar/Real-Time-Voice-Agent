@@ -304,3 +304,30 @@ work belongs to Step 9 after this checkpoint.
 - Added `tests/test_rag.py`. Full Step 11 verification: `pytest` reports 59
   passing tests, `pip check` is clean, backend AST parsing and frontend syntax
   checks pass. The next starting point is Step 12, frontend product experience.
+- Implemented Step 12 frontend product experience with `frontend/protocol.js`,
+  `session-state.js`, `audio-client.js`, `telemetry.js`, and modular
+  `app_modular.js`. Added live captions, streaming responses, tool progress and
+  confirmation UI, citations, device selection, mute/AEC privacy controls,
+  reconnect backoff, generation filtering, accessibility announcements,
+  immediate playback flush, error recovery, and latency telemetry. Updated
+  `frontend/index.html` and routed `/app.js` to the modular implementation.
+- Added `docs/step12_frontend_product_experience.md`. Verification: all browser
+  modules pass `node --check`; the full backend suite remains green with 59
+  passing tests, `pip check` is clean, and backend AST parsing passes. Step 13
+  (desktop and mobile clients) is now the next starting point.
+- Updated `voice_agent_implementation_plan.md` Step 13: desktop is now Electron
+  with React/TypeScript, Android is native Kotlin with Jetpack Compose,
+  Coroutines/StateFlow, OkHttp WebSocket, AudioRecord/AudioTrack, AEC, audio
+  focus, foreground-service, permission, reconnect, and shared protocol
+  requirements. iOS, React Native, Flutter, and Tauri are outside the current
+  implementation scope.
+- Started Step 13 with `desktop/` Electron scaffolding (tray, global shortcut,
+  secure preload, microphone permission handling, floating window, and builder
+  targets) and `android/` Kotlin/Jetpack Compose scaffolding (OkHttp protocol,
+  reconnect state, AudioRecord/AudioTrack, AEC/noise suppression, foreground
+  microphone service, permissions, Compose state, tool confirmation, telemetry,
+  and citations). Added `docs/step13_clients.md` and build-output ignore rules.
+- JavaScript syntax validation passes. Android compilation is pending an
+  Android Studio/Gradle environment because Gradle is not installed in the
+  current workspace. The next task is to generate the Gradle wrapper and run a
+  real emulator/device build, then harden protocol/audio tests.

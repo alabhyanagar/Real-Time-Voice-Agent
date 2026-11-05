@@ -58,3 +58,11 @@ env/
 *.swp
 *.swo
 venv_broken_*/
+
+# Electron and Android build outputs
+desktop/node_modules/
+desktop/dist/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties

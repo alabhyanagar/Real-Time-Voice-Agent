@@ -1,0 +1,36 @@
+{
+  "name": "voice-agent-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop client for the Real-Time Voice Agent",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build:types": "tsc --emitDeclarationOnly",
+    "package": "electron-builder",
+    "package:dir": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^5.7.0"
+  },
+  "build": {
+    "appId": "com.voiceagent.desktop",
+    "productName": "Voice Agent",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

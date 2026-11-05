@@ -19,7 +19,7 @@ LangGraph is used for stateful workflows, checkpointing, streaming, retries, and
 ## Target architecture
 
 ```text
-Browser / Electron / React Native
+Browser / Electron / Kotlin Android
 │
 ├── AudioWorklet or native audio bridge
 ├── Echo cancellation and microphone controls
@@ -793,13 +793,15 @@ Completion criteria:
 - Playback flushes immediately on interruption.
 - The user can recover from provider or network errors.
 
-## Step 13 — Desktop and mobile clients
+## Step 13 — Electron desktop and native Kotlin Android clients
 
-Begin only after the protocol is stable.
+Begin only after the versioned WebSocket protocol, Redis memory, and RAG
+boundaries are stable. The desktop and Android clients are separate native
+frontends, but both consume the same authenticated backend protocol.
 
 ### Desktop
 
-Build Electron or Tauri support with:
+Build an Electron application using React and TypeScript with:
 
 - System tray.
 - Global shortcut.
@@ -808,18 +810,46 @@ Build Electron or Tauri support with:
 - Device switching.
 - Session reconnect.
 - Tool confirmation UI.
+- Shared TypeScript protocol models generated from the backend schema.
+- Secure Electron main/renderer process separation and context isolation.
+- Auto-update and signed release packaging.
+
+Electron is selected for desktop because this project already has a browser
+frontend and requires JavaScript-friendly tray, shortcut, window, and device
+integrations.
 
 ### Mobile
 
-Build React Native or Flutter support with:
+Build an Android-only native application using Kotlin and Jetpack Compose with:
 
-- Native audio bridge.
-- Foreground audio behavior.
-- Native echo cancellation.
-- Audio focus handling.
-- Permission management.
-- Native dialer and contact integrations.
-- Background-service limitations handled per platform.
+- Kotlin Coroutines and StateFlow for session and assistant state.
+- OkHttp WebSocket client for the versioned protocol.
+- `AudioRecord` capture at negotiated 16 kHz, 16-bit mono PCM.
+- `AudioTrack` playback with an immediate flush on barge-in.
+- `AcousticEchoCanceler` and `NoiseSuppressor` where supported.
+- Audio focus and Bluetooth/headset device management.
+- Runtime microphone and notification permissions.
+- A microphone foreground service for active sessions.
+- Native dialer/contact integrations only behind explicit user confirmation.
+- Android background-service restrictions handled according to the target API
+  level and Play policy.
+- Kotlin serialization models generated from the shared protocol schema.
+
+Kotlin is selected instead of React Native or Flutter because this product is
+Android-only and requires low-level audio, foreground-service, audio-focus, and
+permission control. iOS is intentionally outside the current product scope.
+
+### Shared client contract
+
+Both clients must implement:
+
+- The same protocol version and JSON event envelopes.
+- JWT authentication without accepting client-provided user identity.
+- Session reconnect using the server-issued session handle.
+- Audio-format negotiation and PCM frame validation.
+- Listening, processing, speaking, cancelling, and interrupted states.
+- Tool progress, confirmation, result, error, telemetry, and citation events.
+- Immediate local playback flush when a generation changes.
 
 Completion criteria:
 
@@ -827,6 +857,11 @@ Completion criteria:
 - Audio formats are negotiated.
 - Barge-in behavior is consistent across clients.
 - Permissions and privacy status are visible.
+- The Electron client passes desktop packaging and reconnect tests.
+- The Kotlin client passes emulator/device audio, permission, background-service,
+  and reconnect tests.
+- No platform client stores access tokens or user identity outside its approved
+  secure storage boundary.
 
 ## Step 14 — Observability and telemetry
 
